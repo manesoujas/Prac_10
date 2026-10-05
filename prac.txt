@@ -1,53 +1,73 @@
-Project Title: CampusEvents - College Event Management Platform
+------------------------------------------------------------
+PRACTICAL 10
+------------------------------------------------------------
 
-Aim:
-To design and develop a full-featured MERN stack web application for creating, managing, and registering for college events, focusing on hierarchical event structures, animated user interfaces, and role-based access control.
+PROJECT TITLE: 
+CampusEvents - College Event Management Platform
 
-Brief Description:
-CampusEvents is a robust, modular platform built for seamless event operations across educational institutions. It allows Students to intuitively discover and register for technical, cultural, and sports events. Organizers are empowered to securely construct nested event structures, manage participant capacities, and update configurations. Administrators maintain global oversight, including the capability to officially approve pending event drafts to publish them to the public grid.
+AIM:
+To design and develop a full-featured MERN stack web application for creating, managing, and registering for college events, including an administrative dashboard, secure authentication, and role-based access control.
 
-Technologies Used:
+BRIEF DESCRIPTION:
+CampusEvents is a robust, modular web platform built for seamless event operations across educational institutions. 
+It operates on three core user roles:
+1. Students: Can intuitively discover and register for technical, cultural, and sports events. 
+2. Organizers: Empowered to securely construct nested event structures, manage participant capacities, and update configurations. 
+3. Administrators: Maintain global oversight, including the capability to officially approve pending event drafts and publish them to the public grid.
+The platform ensures data security using JWT authentication and prevents overlapping registrations using strict database validations.
+
+TECHNOLOGIES USED:
 - Frontend: React.js, Vite, Axios, Framer Motion (Scroll Animations), Vanilla CSS
-- Backend: Node.js, Express.js, Mongoose
-- Database: MongoDB (Local/Atlas)
-- Security: JSON Web Tokens (JWT), Bcrypt Encryption
-- Utilities: qrcode.react (QR Generation), react-toastify (UI Notifications)
+- Backend: Node.js, Express.js
+- Database: MongoDB (NoSQL) & Mongoose (ODM)
+- Security: JSON Web Tokens (JWT) & Bcrypt Encryption
 
-Project Structure:
-CampuseEvents (Root)
-|-- /client (Frontend React App)
-|   |-- /src
-|   |   |-- /components (Reusable UI like Navbar, SplashScreen)
-|   |   |-- /context (AuthContext for Global State)
-|   |   |-- /pages (Dashboard, Home, CreateEvent, EditEvent)
-|   |   \-- App.jsx (Main Front-End Router Engine)
-|
-\-- /server (Backend API Node)
-    |-- /controllers (Business Logic, e.g., eventController)
-    |-- /models (Mongoose Schemas: User, Event, Registration)
-    |-- /routes (API Network Endpoint Configuration)
-    |-- /middleware (Auth & Security Validation Gates)
-    \-- server.js (Main Express Execution Core)
+PROJECT STRUCTURE:
+CampusEvents
+ |-- client (Frontend)
+ |   |-- src
+ |   |   |-- components (Navbar, SplashScreen)
+ |   |   |-- context (AuthContext for Global State)
+ |   |   |-- pages (Dashboard, Home, CreateEvent, EditEvent)
+ |   |   \-- App.jsx (Main Router Engine)
+ |-- server (Backend)
+     |-- controllers (Business Logic)
+     |-- models (Database Schemas for User, Event, Registration)
+     |-- routes (API Network Endpoints)
+     |-- middleware (Auth & Security Gates)
+     \-- server.js (Express Execution Core)
 
-Core Logic:
-1. Authentication: Uses JWT tokens passed securely in HTTP Headers. The /api/users/me endpoint dynamically reconstructs the user's state on reload.
-2. Event Hierarchy: Organizers can recursively link child events (like competition rounds) to a main parent event using MongoDB ObjectIds.
-3. Role-Based Access Control (RBAC): Backend Middleware strictly verifies `req.user.role` as either 'student', 'organizer', or 'admin' before permitting document operations.
-4. Pending Event Safety: Newly created events are forced into a isolated 'pending' database state. They will never crash or leak into the standard grid until administrators override them to 'published'.
+CORE LOGIC:
+1. Authentication Logic:
+   The system uses JSON Web Tokens passed securely in HTTP Headers. The backend strictly verifies tokens during route execution. The `/api/users/me` endpoint dynamically reconstructs the user's role on reload.
 
-Important Code Snippets:
+2. Event Hierarchy & Database Validation:
+   Organizers can recursively link child events (like competition rounds) to a main parent event using MongoDB ObjectIds. Database checks prevent casting errors if parents are left blank.
 
-1. Event Creation & Sanitization (Backend Controller):
-```javascript
+3. Role-Based Access Control (RBAC):
+   Backend Middleware explicitly evaluates exactly what role a user holds ('student', 'organizer', or 'admin'). An organizer is blocked from tampering with events they do not own.
+
+4. Pending Event Sandbox Security:
+   Newly formulated events are forced into a segregated 'pending' database state. They remain invisible to standard students and are blocked from the main grid until an Administrator overrides their enum state to 'published'.
+
+IMPORTANT CODE:
+
+Below is the backend controller logic used to securely map an Event payload into the Database:
+
 export const createEvent = async (req, res) => {
     try {
         const { title, parentEvent, rootEvent } = req.body;
-        const slug = slugify(title, { lower: true, strict: true }) + '-' + Date.now();
-        // Dynamically applies approval states based on security profile
-        const eventData = { ...req.body, slug, organizer: req.user._id, rootEvent, status: req.user.role === 'admin' ? 'published' : 'pending' };
         
-        // Prevent Mongoose ObjectId CastErrors from empty dropdown strings
+        // Dynamically apply approval states based on security profile
+        const eventData = { 
+            ...req.body, 
+            organizer: req.user._id, 
+            status: req.user.role === 'admin' ? 'published' : 'pending' 
+        };
+        
+        // Prevent Mongoose CastErrors from empty dropdown strings
         if (!eventData.parentEvent) delete eventData.parentEvent; 
+        if (!eventData.rootEvent) delete eventData.rootEvent; 
         
         const event = await Event.create(eventData);
         res.status(201).json({ success: true, data: event });
@@ -55,29 +75,53 @@ export const createEvent = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-```
 
-2. Role-Based Dashboard Display (Frontend React UI):
-```javascript
-{user?.role === 'admin' && (
-    <div style={{ marginTop: '4rem' }}>
-        <h3>Pending Event Approvals</h3>
-        {pendingAdminEvents.map(evt => (
-             <div className="card">
-                  <h4>{evt.title}</h4>
-                  <button onClick={() => handleApproveEvent(evt._id)}>
-                      Approve & Publish
-                  </button>
-             </div>
-        ))}
-    </div>
-)}
-```
+2. Frontend Route Protection (React Context & Router):
+This snippet demonstrates how the React frontend shields secure pages from unauthorized users utilizing Context API.
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+    const { user, loading } = useAuth();
+    if (loading) return <div>Loading...</div>;
+    if (!user) return <Navigate to="/login" />;
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+        return <Navigate to="/unauthorized" />;
+    }
+    return children;
+};
+
+// Inside App.jsx routing component:
+<Route path="/admin/dashboard" element={
+    <ProtectedRoute allowedRoles={['admin']}>
+        <AdminDashboard />
+    </ProtectedRoute>
+} />
 
 
-Screenshots of the Working Project (Print and attach exactly below this line):
-1. [Insert Screenshot 1: The Initial Animated Black Splash Screen loading mechanism]
-2. [Insert Screenshot 2: The Modern Home Landing Page with Categorical Images rendering]
-3. [Insert Screenshot 3: The Registration Page containing User Details]
-4. [Insert Screenshot 4: User/Organizer Dashboards mapping the Event Grids]
-5. [Insert Screenshot 5: The "Create New Event" hierarchical Form Page]
+3. Animated UI Integration (Framer Motion):
+This snippet handles the dynamic loading animations triggering when users scroll the Home Dashboard, providing a premium SaaS user experience.
+
+import { motion } from 'framer-motion';
+
+const fadeInUp = {
+    hidden: { opacity: 0, y: 40 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
+};
+
+<motion.div 
+    variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }}
+    style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
+    {events.map((evt) => (
+        <motion.div key={evt._id} variants={fadeInUp}>
+            <EventCard event={evt} />
+        </motion.div>
+    ))}
+</motion.div>
+
+
+OUTPUT SCREENSHOTS TO ATTACH:
+(Please print and paste the following screenshots below this line)
+1. Screenshot of the Dashboard showing Pending Approvals.
+2. Screenshot of the Home Landing Page with Categorical Images.
+3. Screenshot of the "Create New Event" form page.
+4. Screenshot of the Registration completion alert.
+------------------------------------------------------------
